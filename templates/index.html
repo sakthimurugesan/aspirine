@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Home</title>
+</head>
+<body>
+<table border="1" style="border-collapse:collapse ;">
+    <tr>
+        <th>id</th>
+        <th>lat</th>
+        <th>long</th>
+    </tr>
+    {% for foo in m %}
+        <tr>
+            <td>{{ foo.id1 }}</td>
+            <td>{{ foo.s }}</td>
+        <td>{{ foo.s2 }}</td>
+        </tr>
+    {% endfor %}
+
+    
+
+</table>
+
+
+
+
+</body>
+</html>
