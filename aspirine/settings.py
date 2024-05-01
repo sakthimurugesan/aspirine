@@ -81,9 +81,9 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'aspirine',
-        'USER': 'sakthi',
+        'USER': 'root',
         'PASSWORD': 'password',
-        'HOST':'103.168.18.136',
+        'HOST':'localhost',
         'PORT':'3306',
     }
 }
@@ -114,7 +114,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE =  'Asia/Kolkata'
 
 USE_I18N = True
 
