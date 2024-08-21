@@ -38,7 +38,7 @@ def getdata(request):
         if(is_point_inside_rectangle(x1,y1,x2,y2,x,y)):
             laneId=coor.lane.id
             lane1_on_url=coor.lane.green_on_url #green on url
-            requests.get(url=lane1_on_url)
+            # requests.get(url=lane1_on_url)
             print(lane1_on_url)
             lane1_off_url=coor.lane.green_off_url # green off url 
             check_lane_exist_in_offtable=OffTable.objects.filter(lane=coor.lane)
@@ -84,7 +84,8 @@ def sayHi():
             temp_date=datetime(obj.offtime.year,obj.offtime.month,obj.offtime.day,obj.offtime.hour,obj.offtime.minute,0)
             if(temp_date<=d):
                 try:
-                    requests.get(obj.offURL)
+                    # requests.get(obj.offURL)
+                    pass
                 except:
                     pass
 
