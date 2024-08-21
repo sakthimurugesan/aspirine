@@ -1,0 +1,380 @@
+#include <TinyGPS++.h>
+ #include <SoftwareSerial.h>
+#include <AltSoftSerial.h>
+
+#define rxPin 2
+#define txPin 3
+SoftwareSerial sim800L(rxPin,txPin); 
+
+//GPS Module RX pin to Arduino 9
+//GPS Module TX pin to Arduino 8
+AltSoftSerial neogps;
+
+TinyGPSPlus gps;
+
+unsigned long previousMillis = 0;
+long interval = 15000;
+
+
+void setup()
+{
+  //Begin serial communication with Arduino and Arduino IDE (Serial Monitor)
+  Serial.begin(115200);
+  
+  //Begin serial communication with Arduino and SIM800L
+  sim800L.begin(9600);
+
+  //Begin serial communication with Arduino and SIM800L
+  neogps.begin(9600);
+
+  Serial.println("Initializing...");
+  //delay(10000);
+
+  //Once the handshake test is successful, it will back to OK
+  sendATcommand("AT", "OK", 2000);
+  sendATcommand("AT+CMGF=1", "OK", 2000);
+  //sim800L.print("AT+CMGR=40\r");
+  
+}
+
+void loop()
+{
+  while(sim800L.available()){
+    Serial.println(sim800L.readString());
+  }
+  while(Serial.available())  {
+    sim800L.println(Serial.readString());
+  }
+
+    unsigned long currentMillis = millis();
+    if(currentMillis - previousMillis > interval) {
+       previousMillis = currentMillis;
+       sendGpsToServer();
+    }
+}
+
+int sendGpsToServer()
+{
+    //Can take up to 60 seconds
+    boolean newData = false;
+    for (unsigned long start = millis(); millis() - start < 2000;){
+      while (neogps.available()){
+        if (gps.encode(neogps.read())){
+          newData = true;
+          break;
+        }
+      }
+    }
+  
+    //If newData is true
+    if(true){
+      newData = false;
+      
+      String latitude, longitude;
+      float altitude;
+      unsigned long date, time, speed, satellites;
+  
+      latitude = String(gps.location.lat(), 6); // Latitude in degrees (double)
+      longitude = String(gps.location.lng(), 6); // Longitude in degrees (double)
+      altitude = gps.altitude.meters(); // Altitude in meters (double)
+      date = gps.date.value(); // Raw date in DDMMYY format (u32)
+      time = gps.time.value(); // Raw time in HHMMSSCC format (u32)
+      speed = gps.speed.kmph();
+      
+      Serial.print("Latitude= "); 
+      Serial.print(latitude);
+      Serial.print(" Longitude= "); 
+      Serial.println(longitude);
+  
+      //if (latitude == 0) {return 0;}
+      
+      String url, temp;
+      url = "http://103.168.18.136:8000/getdata?lat=";
+      url += latitude;
+      url += "&lng=";
+      url += longitude;
+
+      //url = "http://ahmadssd.000webhostapp.com/gpsdata.php?lat=222&lng=222";
+
+      Serial.println(url);    
+          
+    sendATcommand("AT+CFUN=1", "OK", 2000);
+    //AT+CGATT = 1 Connect modem is attached to GPRS to a network. AT+CGATT = 0, modem is not attached to GPRS to a network
+    sendATcommand("AT+CGATT=1", "OK", 2000);
+    //Connection type: GPRS - bearer profile 1
+    sendATcommand("AT+SAPBR=3,1,\"Contype\",\"GPRS\"", "OK", 2000);
+    //sets the APN settings for your network provider.
+    sendATcommand("AT+SAPBR=3,1,\"APN\",\"internet\"", "OK", 2000);
+    //enable the GPRS - enable bearer 1
+    sendATcommand("AT+SAPBR=1,1", "OK", 2000);
+    //Init HTTP service
+    sendATcommand("AT+HTTPINIT", "OK", 2000); 
+    sendATcommand("AT+HTTPPARA=\"CID\",1", "OK", 1000);
+    //Set the HTTP URL sim800.print("AT+HTTPPARA="URL","http://ahmadssd.000webhostapp.com/gpsdata.php?lat=222&lng=222"\r");
+    sim800L.print("AT+HTTPPARA=\"URL\",\"");
+    sim800L.print(url);
+    sendATcommand("\"", "OK", 1000);
+    //Set up the HTTP action
+    sendATcommand("AT+HTTPACTION=0", "0,200", 1000);
+    //Terminate the HTTP service
+    sendATcommand("AT+HTTPTERM", "OK", 1000);
+    //shuts down the GPRS connection. This returns "SHUT OK".
+    sendATcommand("AT+CIPSHUT", "SHUT OK", 1000);
+
+    Serial.println("-------------------------------------");
+    Serial.println("SMS");
+    Serial.println("-------------------------------------");
+
+  }
+  return 1;    
+}
+
+int8_t sendATcommand(char* ATcommand, char* expected_answer, unsigned int timeout){
+
+    uint8_t x=0,  answer=0;
+    char response[100];
+    unsigned long previous;
+
+    //Initialice the string
+    memset(response, '\0', 100);
+    
+    //Clean the input buffer
+    while( sim800L.available() > 0) sim800L.read();
+    
+    if (ATcommand[0] != '\0'){
+      //Send the AT command 
+      sim800L.println(ATcommand);
+    }
+
+    x = 0;
+    previous = millis();
+
+    //this loop waits for the answer with time out
+    do{
+        //if there are data in the UART input buffer, reads it and checks for the asnwer
+        if(sim800L.available() != 0){
+            response[x] = sim800L.read();
+            //Serial.print(response[x]);
+            x++;
+            // check if the desired answer (OK) is in the response of the module
+            if(strstr(response, expected_answer) != NULL){
+                answer = 1;
+            }
+        }
+    }while((answer == 0) && ((millis() - previous) < timeout));
+
+  Serial.println(response);
+  return answer;
+}
+
+
+
+//-----------------------------------------------------------------------------------------------------------------------------
+//boolean sendATcommand(String expected_answer="OK", unsigned int timeout=2000) //uncomment if syntax error (arduino)
+/*
+boolean sendATcommand(String ATcommand, String expected_answer, unsigned int timeout) //uncomment if syntax error (esp8266)
+{
+  uint8_t x=0, answer=0;
+  String response;
+  unsigned long previous;
+    
+  //Clean the input buffer
+  while( SIM800.available() > 0) SIM800.read();
+  sim800L.println(ATcommand);
+  
+  //NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN
+  previous = millis();
+  do{
+    //if data in UART INPUT BUFFER, reads it
+    if(SIM800.available() != 0){
+        char c = SIM800.read();
+        response.concat(c);
+        x++;
+        //checks if the (response == expected_answer)
+        if(response.indexOf(expected_answer) > 0){
+            answer = 1;
+        }
+    }
+  }while((answer == 0) && ((millis() - previous) < timeout));
+  //NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN
+  
+  Serial.println(response);
+  return answer;
+  
+} 
+*/
+//-----------------------------------------------------------------------------------------------------------------------------
+
+//AT+CFUN=1
+//AT+CGATT=1
+//AT+SAPBR=3,1,"Contype","GPRS"
+//AT+SAPBR=3,1,"APN","internet"
+//AT+SAPBR=1,1
+
+
+
+
+/*
+ * ------------------------------------------------------------------------
+ * Created by: Tauseef Ahmad
+ * Created on: 27 January 2022
+ *  
+ *  Video Tutorial:
+ *  https://youtu.be/7CXlOPPGdN4
+ *  
+ * ------------------------------------------------------------------------
+ * Download Resources
+ * ------------------------------------------------------------------------
+ * Preferences--> Aditional boards Manager URLs : 
+ * For ESP8266 and NodeMCU:
+ * http://arduino.esp8266.com/stable/package_esp8266com_index.json
+ * ------------------------------------------------------------------------
+ * Download latest Blynk Library:
+ * https://github.com/blynkkk/blynk-library/releases/latest
+ * ------------------------------------------------------------------------
+ * Adafruit FONA Library
+ * https://github.com/adafruit/Adafruit_FONA
+ * ------------------------------------------------------------------------*/
+
+
+//------------------------------------------------------------------
+#define BLYNK_PRINT Serial
+#define TINY_GSM_MODEM_SIM800
+//------------------------------------------------------------------
+
+#include <Adafruit_FONA.h>
+#include <SoftwareSerial.h>
+//GPS Module RX pin to NodeMCU D3
+//GPS Module TX pin to NodeMCU D4
+#define rxPin D4
+#define txPin D3
+#define FONA_RST 13
+SoftwareSerial Sim800L(rxPin,txPin);
+SoftwareSerial *fonaSerial = &Sim800L;
+//Hardware serial is also possible! for ESP32
+//HardwareSerial *fonaSerial = &Serial2;
+Adafruit_FONA fona = Adafruit_FONA(FONA_RST);
+
+
+//------------------------------------------------------------------
+#define BLYNK_TEMPLATE_ID "TMPL3GQR_hLfO"
+#define BLYNK_TEMPLATE_NAME "board1"
+#define BLYNK_AUTH_TOKEN "bFlEdoa-cnTzZdiP8cnoefGjhi_pFe5y"
+//------------------------------------------------------------------
+
+#include <TinyGsmClient.h>
+#include <BlynkSimpleTinyGSM.h>
+//------------------------------------------------------------------
+char auth[] = BLYNK_AUTH_TOKEN;
+// Your GPRS credentials
+// Leave empty, if missing user or pass
+char apn[]  = "internet";
+char user[] = "";
+char pass[] = "";
+//------------------------------------------------------------------
+TinyGsm modem(fona);
+BlynkTimer timer;
+//------------------------------------------------------------------
+//NOTE: Enter the phone number that you want to register with the project
+//You can only control the project, with the phone number you entered here
+//Must enter your personal phone number with country code.
+//Make Sure: never enter the gsm module's phone number here.
+
+const String PHONE = "+916382550891";
+//------------------------------------------------------------------
+#define pin_relay1 D5
+#define pin_relay2 D6
+
+//------------------------------------------------------------------
+int state_relay1 = 0;
+int state_relay2 = 0;
+
+//------------------------------------------------------------------
+//Change the virtual pins, as you have set in the blynk account.
+#define virtual_pin1    V1
+#define virtual_pin2    V2
+
+//------------------------------------------------------------------
+String gsm_buff ="";
+char sendsms[15];
+char caller_id[32];
+char sms_buffer[255];
+int len=0;
+
+
+//------------------------------------------------------------------
+BLYNK_WRITE(virtual_pin1) {
+  state_relay1 = param.asInt();
+  digitalWrite(pin_relay1, state_relay1);
+   Serial.print("Relay 1 is ");
+   if(state_relay1==0)
+   Serial.println("OFF");
+   else
+   Serial.println("ON");
+}
+//------------------------------------------------------------------
+BLYNK_WRITE(virtual_pin2) {
+  state_relay2 = param.asInt();
+  digitalWrite(pin_relay2, state_relay2);
+   Serial.print("Relay 2 is ");
+   if(state_relay2==0)
+   Serial.println("OFF");
+   else
+   Serial.println("ON");
+}
+//------------------------------------------------------------------
+
+//------------------------------------------------------------------
+
+
+
+ 
+
+void setup()
+{
+  Serial.begin(115200);
+    //--------------------------------------------------------------------
+  pinMode(pin_relay1, OUTPUT);
+  pinMode(pin_relay2, OUTPUT);
+
+  //--------------------------------------------------------------------
+  //During Starting all Relays should TURN OFF
+  digitalWrite(pin_relay1, LOW);
+  digitalWrite(pin_relay2, LOW);
+
+  //--------------------------------------------------------------------
+  delay(2000);
+   fonaSerial->begin(9600);
+  if (! fona.begin(*fonaSerial)) {
+    Serial.println(F("Couldn't find FONA"));
+    while(1);
+  }
+  //--------------------------------------------------------------------
+  Serial.println(F("FONA is OK"));
+  fona.println("AT+CMGF=1"); // Configuring TEXT mode
+  delay(1000);
+  fona.print ("AT+CSMP=17,167,0,0\r");// Configuring TEXT mode
+  delay(1000);
+  fona.print("AT+CNMI=2,1\r\n");  //set up the fona to send a +CMTI notification when an SMS is received
+ 
+  //fona.println(F("AT+CMGDA=\"DEL ALL\""));
+  //delay(5000);
+  delay(1000);
+  Serial.println("FONA Ready");
+  //--------------------------------------------------------------------
+  modem.restart();
+  // Unlock your SIM card with a PIN
+  //modem.simUnlock("1234");
+
+  Blynk.begin(auth, modem, apn, user, pass);
+  Blynk.virtualWrite(virtual_pin1, state_relay1);
+  Blynk.virtualWrite(virtual_pin2, state_relay2);
+
+  //--------------------------------------------------------------------
+}
+
+void loop()
+{
+  Blynk.run();
+  timer.run();
+}
