@@ -11,6 +11,9 @@ class CoordinatesAdmin(admin.ModelAdmin):
         OffSwitchInline,
     ]
 
+class LaneAdmin(admin.ModelAdmin):
+    prepopulated_fields=[]
+
 admin.site.register(Coordinates, CoordinatesAdmin)
 
 admin.site.register(State)
