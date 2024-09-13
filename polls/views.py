@@ -1,12 +1,11 @@
 import threading
-import time as t
 from datetime import datetime, timedelta
 import pytz
 import requests
 from django.http import HttpResponse
 from django.shortcuts import render
-from .models import M, Coordinates, OffSwitch, OffTable, Lane, Junction
-
+from .models import M, Coordinates, OffSwitch, OffTable, Lane, Junction, JunctionLaneState
+import time as t
 IST = pytz.timezone('Asia/Kolkata')
 
 
@@ -31,19 +30,13 @@ def getdata(request):
                                      float(coor.lower_right_y), float(lat), float(lng)):
             ambulance_detected = True
             lane = coor.lane
-            lanes_to_be_stored=[lane]
+            lanes_to_be_stored = [lane]
             # Check if the lane is already in the OffTable
             if not OffTable.objects.filter(lane=lane).exists():
                 lane1_on_url = lane.green_on_url
                 lane1_off_url = lane.green_off_url
 
                 # Turn on the green light for the ambulance lane
-                # requests.get(url=lane1_on_url)
-                """
-                red off green on
-                """
-                print(f"Turning red off for lane: {lane.lane} (URL: {lane.red_switch_off_url})")
-                print(f"Turning green for lane: {lane.lane} (URL: {lane1_on_url})")
                 lane.current_status = 'green'
                 lane.green_triggered_by = 'ambulance'
                 lane.save()
@@ -52,32 +45,18 @@ def getdata(request):
 
                 url_list = [lane1_off_url]
                 for i in temp:
-                    # requests.get(url=i.offswitch.red_switch_on_url)
-                    # print('-' * 100)
-                    # print(f"Turning red on for lane: {i.offswitch.lane} (URL: {i.offswitch.red_switch_on_url})")
-                    # print('-' * 100)
-                    """
-                    red on green off
-                    """
-                    obj=Lane.objects.get(id=i.offswitch.id)
-                    print('-' * 100)
-                    print(obj.lane)
-                    print('-' * 100)
-
+                    obj = Lane.objects.get(id=i.offswitch.id)
                     obj.green_triggered_by = 'ambulance'
                     obj.current_status = 'red'
                     obj.save()
                     url_list.append(i.offswitch.red_switch_off_url)
                     lanes_to_be_stored.append(obj)
 
-                for url in url_list:
-                    print(f"URL to be saved in OffTable: {url}")
-
                 off_time = datetime.now(IST) + timedelta(minutes=2)
-
+                junc = lanes_to_be_stored[0].junction
 
                 for i in range(len(url_list)):
-                    OffTable.objects.create(lane=lanes_to_be_stored[i], offURL=url_list[i], offtime=off_time)
+                    OffTable.objects.create(lane=lanes_to_be_stored[i], offURL=url_list[i], offtime=off_time, junction=junc)
             else:
                 # Extend the off time if the lane is already in OffTable
                 for obj in OffTable.objects.filter(lane=lane):
@@ -101,88 +80,100 @@ def traffic_light_queue_system():
     This function controls the traffic light queue system, ensuring that each lane in every junction gets a green light for 30 seconds.
     If an ambulance is detected in a lane, that lane's light stays green until the ambulance passes.
     """
-    while True:
-        print("Running traffic_light_queue_system...")
-        junctions = Junction.objects.all()
+    print("Running traffic_light_queue_system...")
+    junctions = Junction.objects.all()
 
-        for junction in junctions:
-            lanes = Lane.objects.filter(junction=junction)
-            lanes_to_turn_green = []
-            amb = False
-            lanes_to_turn_red = []
-            for lane in lanes:
-                if lane.green_triggered_by == 'ambulance':
-                    amb = True
-                    break
-                else:
-                    if lane.current_status == 'red':
-                        lanes_to_turn_green.append(lane)
-                    else:
-                        lanes_to_turn_red.append(lane)
-            if amb:
-                continue
+    for junction in junctions:
+        lanes = Lane.objects.filter(junction=junction).order_by('id')
+        lanes_as_list = list(lanes)
+        lane_count = len(lanes)
 
-            # Turn lanes to green as necessary
-            for lane in lanes_to_turn_green:
-                # Turn the lane green
-                # requests.get(url=lane.green_on_url)
-                lane.current_status = 'green'
-                lane.green_triggered_by = 'timer'
-                lane.save()
-                print(f"QUEUE Lane {lane.lane} is turned green (triggered by timer).")
+        try:
+            lane_state = JunctionLaneState.objects.get(junction=junction)
+        except JunctionLaneState.DoesNotExist:
+            lane_state = JunctionLaneState.objects.create(junction=junction, next_lane=lanes.first())
 
-            for lane in lanes_to_turn_red:
-                # Turn the lane red
-                # requests.get(url=lane.red_on_url)
-                lane.current_status = 'red'
-                lane.green_triggered_by = 'timer'
-                lane.save()
-                print(f"QUEUE Lane {lane.lane} is turned red (triggered by timer).")
+        current_lane = lane_state.next_lane
+        if current_lane.green_triggered_by == 'ambulance':
+            continue
 
-        t.sleep(60)  # Sleep to prevent overwhelming the server
+        lanes_to_turn_green = []
+        amb = False
+        lanes_to_turn_red = []
+
+        for lane in lanes:
+            if lane.green_triggered_by == 'ambulance':
+                amb = True
+                break
+            elif lane == current_lane:
+                if lane.current_status == 'red':
+                    lanes_to_turn_green.append(lane)
+            else:
+                lanes_to_turn_red.append(lane)
+
+        if amb:
+            continue
+
+        for lane in lanes_to_turn_green:
+            lane.current_status = 'green'
+            lane.green_triggered_by = 'timer'
+            print("Green ",lane.lane)
+            lane.save()
+
+        for lane in lanes_to_turn_red:
+            lane.current_status = 'red'
+            print("Red ",lane.lane)
+            lane.green_triggered_by = 'timer'
+            lane.save()
+
+        next_lane_index = (lanes_as_list.index(current_lane) + 1) % lane_count
+        lane_state.next_lane = lanes[next_lane_index]
+        lane_state.save()
 
 
 def sayHi():
     """
-    This function checks every minute if the ambulance has left the zone.
-    If the ambulance has left, it will turn off the lights and update the lane statuses.
-    Additionally, it will handle the transition of lanes based on the timer.
+    This function checks if the ambulance has left the zone and handles the transition of lanes based on the timer.
     """
-    while True:
-        d1 = datetime.now(IST).replace(second=0, microsecond=0)
-        offtable_data = OffTable.objects.all()
+    d1 = datetime.now(IST)
+    offtable_data = OffTable.objects.all()
+    print("Ambulance position checker")
+    print(d1)
+    print("-"*100)
+    for obj in offtable_data:
+        if obj.offtime <= d1:
+            junc = obj.lane.junction
+            print(junc.junction)
+            next_junc = JunctionLaneState.objects.get(junction=junc).next_lane
+            all_lanes_from_junction = Lane.objects.filter(junction=junc)
 
-        for obj in offtable_data:
-            if obj.offtime <= d1:
-                lane = obj.lane
-                print(lane.lane)
-                # Turn off the light using the offURL
-                try:
-                    print(f"SAYHI Turning off light for lane: {lane.lane} (URL: {obj.offURL})")
-                    # requests.get(obj.offURL)
-                except requests.RequestException as e:
-                    print(f"SAYHI Failed to send request: {e}")
-
-                # Update lane status based on the previous status and trigger
-                if lane.current_status == 'green':
-                    lane.current_status = 'red'
-
+            for lane in all_lanes_from_junction:
+                if lane == next_junc:
+                    print("Green ",lane.lane)
+                    lane.green_triggered_by = "timer"
+                    lane.current_status = "green"
+                    lane.save()
                 else:
-                    lane.current_status = 'green'
-                lane.green_triggered_by = 'timer'
-                lane.save()
+                    print("Red ",lane.lane)
+                    lane.green_triggered_by = "timer"
+                    lane.current_status = "red"
+                    lane.save()
 
-                # Remove the entry from OffTable after turning off the lights
-                obj.delete()
+            delete_lanes_from_offtable = OffTable.objects.filter(junction=junc)
+            for lane in delete_lanes_from_offtable:
+                lane.delete()
+                
+        
+    print('-'*100)
 
-        t.sleep(60)
+
+# Function to run both tasks every 30 seconds
+def run_every_30_seconds():
+    traffic_light_queue_system()
+    sayHi()
+    # Schedule the next run in 30 seconds
+    threading.Timer(30, run_every_30_seconds).start()
 
 
-# Start the background threads
-queue_thread = threading.Thread(target=traffic_light_queue_system)
-queue_thread.daemon = True
-queue_thread.start()
-
-say_hi_thread = threading.Thread(target=sayHi)
-say_hi_thread.daemon = True
-say_hi_thread.start()
+# Call the function to start the recurring process
+run_every_30_seconds()

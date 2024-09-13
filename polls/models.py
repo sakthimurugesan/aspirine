@@ -73,6 +73,7 @@ class OffTable(models.Model):
     lane = models.ForeignKey(Lane, on_delete=models.CASCADE)
     offURL = models.CharField(max_length=500)
     offtime = models.DateTimeField()
+    junction=models.ForeignKey(Junction,on_delete=models.CASCADE,null=True,blank=True,default=None)
 
 
 
@@ -83,3 +84,11 @@ class M(models.Model):
 
     def __str__(self):
         return f"{self.s} {self.s2}"
+from django.db import models
+
+class JunctionLaneState(models.Model):
+    junction = models.ForeignKey(Junction, on_delete=models.CASCADE)
+    next_lane = models.ForeignKey(Lane, on_delete=models.CASCADE)  # The lane to be turned green next
+
+    def __str__(self):
+        return f"Junction {self.junction.id} - Next Lane: {self.next_lane.id}"

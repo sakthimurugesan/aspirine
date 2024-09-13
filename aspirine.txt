@@ -89,7 +89,7 @@ int sendGpsToServer()
       //if (latitude == 0) {return 0;}
       
       String url, temp;
-      url = "http://103.168.18.136:8000/getdata?lat=";
+      url = "http://103.168.18.181:8000/getdata?lat=";
       url += latitude;
       url += "&lng=";
       url += longitude;

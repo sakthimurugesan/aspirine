@@ -5,10 +5,9 @@ url = "https://blynk.cloud/external/api/update?token=bFlEdoa-cnTzZdiP8cnoefGjhi_
 
 # A GET request to the API
 response = requests.get(url)
-
+url1="http://103.168.18.181/getdata?lat=123&lng=456"
 # Print the response
 
-
-"""
-{'userId': 1, 'id': 1, 'title': 'sunt aut facere repellat provident occaecati excepturi optio reprehenderit', 'body': 'quia et suscipit\nsuscipit recusandae consequuntur expedita et cum\nreprehenderit molestiae ut ut quas totam\nnostrum rerum est autem sunt rem eveniet architecto'}
-"""
+for i in range(500):
+    requests.get(url1)
+    
