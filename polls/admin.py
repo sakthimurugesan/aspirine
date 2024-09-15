@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import State, Taluka, District, Lane, Junction, OffSwitch, Coordinates, M,OffTable,JunctionLaneState
+from .models import State, Taluka, District, Lane, Junction, OffSwitch, Coordinates, M,OffTable,JunctionLaneState,CurrentJunctionState
 
 
 class OffSwitchInline(admin.TabularInline):
@@ -24,3 +24,4 @@ admin.site.register(Junction)
 admin.site.register(M)
 admin.site.register(OffTable)
 admin.site.register(JunctionLaneState)
+admin.site.register(CurrentJunctionState)

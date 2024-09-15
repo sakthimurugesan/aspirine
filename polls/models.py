@@ -92,3 +92,11 @@ class JunctionLaneState(models.Model):
 
     def __str__(self):
         return f"Junction {self.junction.id} - Next Lane: {self.next_lane.id}"
+class CurrentJunctionState(models.Model):
+    junction = models.ForeignKey(Junction, on_delete=models.CASCADE)
+    lane=models.ForeignKey(Lane,on_delete=models.CASCADE)
+
+    def __str__(self):
+        return self.lane.lane
+    
+    

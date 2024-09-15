@@ -4,7 +4,7 @@ import pytz
 import requests
 from django.http import HttpResponse
 from django.shortcuts import render
-from .models import M, Coordinates, OffSwitch, OffTable, Lane, Junction, JunctionLaneState
+from .models import M, Coordinates, OffSwitch, OffTable, Lane, Junction, JunctionLaneState,CurrentJunctionState
 import time as t
 IST = pytz.timezone('Asia/Kolkata')
 
@@ -13,6 +13,15 @@ def home(request):
     m = M.objects.values().all()
     return render(request, template_name="index.html", context={"m": m})
 
+
+def getJunctionState(request):
+    junctionId=int(request.GET['junctionid'])
+    #print(junctionId)
+    junctions=CurrentJunctionState.objects.filter(junction=junctionId)
+    if(len(junctions)==0):
+        return -1
+    for junction in junctions:
+        return HttpResponse(int(junction.lane.id))
 
 def getdata(request):
     lat = request.GET['lat']
@@ -35,12 +44,20 @@ def getdata(request):
             if not OffTable.objects.filter(lane=lane).exists():
                 lane1_on_url = lane.green_on_url
                 lane1_off_url = lane.green_off_url
-
+                junction=lane.junction
+                current_junction_state=CurrentJunctionState.objects.filter(junction=junction)
+                #print(current_junction_state)
                 # Turn on the green light for the ambulance lane
                 lane.current_status = 'green'
                 lane.green_triggered_by = 'ambulance'
                 lane.save()
-
+                if len(current_junction_state)>0:
+                    for obj in current_junction_state:
+                        obj.lane=lane
+                        obj.save()
+                        #print(obj.lane)
+                else:
+                    CurrentJunctionState.objects.create(junction=junction,lane=lane)
                 temp = OffSwitch.objects.filter(onswitch=coor)
 
                 url_list = [lane1_off_url]
@@ -71,6 +88,8 @@ def getdata(request):
     return HttpResponse(f"<h1>Ambulance detected at coordinates: {lat}, {lng}</h1>")
 
 
+
+
 def is_point_inside_rectangle(x1, y1, x2, y2, x, y):
     return x1 <= x <= x2 and y1 <= y <= y2
 
@@ -80,7 +99,7 @@ def traffic_light_queue_system():
     This function controls the traffic light queue system, ensuring that each lane in every junction gets a green light for 30 seconds.
     If an ambulance is detected in a lane, that lane's light stays green until the ambulance passes.
     """
-    print("Running traffic_light_queue_system...")
+    #print("Running traffic_light_queue_system...")
     junctions = Junction.objects.all()
 
     for junction in junctions:
@@ -113,16 +132,25 @@ def traffic_light_queue_system():
 
         if amb:
             continue
-
+        current_junction_state=CurrentJunctionState.objects.filter(junction=junction)
         for lane in lanes_to_turn_green:
             lane.current_status = 'green'
             lane.green_triggered_by = 'timer'
-            print("Green ",lane.lane)
+            #print("Green ",lane.lane)
             lane.save()
+
+            if len(current_junction_state)>0:
+                for obj in current_junction_state:
+                    obj.lane=lane
+                    obj.save()
+                    #print(obj.lane)
+            else:
+                CurrentJunctionState.objects.create(junction=junction,lane=lane)
+            
 
         for lane in lanes_to_turn_red:
             lane.current_status = 'red'
-            print("Red ",lane.lane)
+            #print("Red ",lane.lane)
             lane.green_triggered_by = 'timer'
             lane.save()
 
@@ -137,24 +165,32 @@ def sayHi():
     """
     d1 = datetime.now(IST)
     offtable_data = OffTable.objects.all()
-    print("Ambulance position checker")
-    print(d1)
-    print("-"*100)
+    #print("Ambulance position checker")
+    #print(d1)
+    #print("-"*100)
     for obj in offtable_data:
         if obj.offtime <= d1:
             junc = obj.lane.junction
-            print(junc.junction)
+            #print(junc.junction)
             next_junc = JunctionLaneState.objects.get(junction=junc).next_lane
             all_lanes_from_junction = Lane.objects.filter(junction=junc)
-
+            current_junction_state=CurrentJunctionState.objects.filter(junction=junc)
+            #print(current_junction_state)
             for lane in all_lanes_from_junction:
                 if lane == next_junc:
-                    print("Green ",lane.lane)
+                    #print("Green ",lane.lane)
                     lane.green_triggered_by = "timer"
                     lane.current_status = "green"
                     lane.save()
+                    if len(current_junction_state)>0:
+                        for obj in current_junction_state:
+                            obj.lane=lane
+                            obj.save()
+                            #print(obj.lane)
+                    else:
+                        CurrentJunctionState.objects.create(junction=junc,lane=lane)
                 else:
-                    print("Red ",lane.lane)
+                    #print("Red ",lane.lane)
                     lane.green_triggered_by = "timer"
                     lane.current_status = "red"
                     lane.save()
@@ -164,7 +200,7 @@ def sayHi():
                 lane.delete()
                 
         
-    print('-'*100)
+    #print('-'*100)
 
 
 # Function to run both tasks every 30 seconds

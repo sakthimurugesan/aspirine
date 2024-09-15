@@ -1,1 +1,4 @@
 /venv
+/.idea
+/polls/migrations
+/polls/__pycache__
