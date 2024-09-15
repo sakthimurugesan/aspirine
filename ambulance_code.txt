@@ -1,0 +1,279 @@
+#include <TinyGPS++.h>
+#include <SoftwareSerial.h>
+#include <AltSoftSerial.h>
+
+#define rxPin 2
+#define txPin 3
+SoftwareSerial sim800L(rxPin, txPin);
+AltSoftSerial neogps;
+
+TinyGPSPlus gps;
+
+unsigned long previousMillis = 0;
+long interval = 10000;
+
+void setup() {
+  Serial.begin(115200);        // Begin serial communication with Serial Monitor
+  sim800L.begin(9600);         // Begin serial communication with SIM800L
+  neogps.begin(9600);          // Begin serial communication with GPS module
+
+  Serial.println("Initializing...");
+  
+  sendATcommand("AT", "OK", 2000);
+  sendATcommand("AT+CMGF=1", "OK", 2000);
+}
+
+void loop() {
+  if (sim800L.available()) {
+    Serial.println(sim800L.readString());
+  }
+  if (Serial.available()) {
+    sim800L.println(Serial.readString());
+  }
+
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis > interval) {
+    previousMillis = currentMillis;
+    sendGpsToServer();
+  }
+}
+
+void sendGpsToServer() {
+  // Gather GPS data
+  bool newData = false;
+  for (unsigned long start = millis(); millis() - start < 2000;) {
+    while (neogps.available()) {
+      if (gps.encode(neogps.read())) {
+        newData = true;
+        break;
+      }
+    }
+  }
+  
+  if (true) {
+    String latitude = String(gps.location.lat(), 6);
+    String longitude = String(gps.location.lng(), 6);
+
+    Serial.print("Latitude= "); 
+    Serial.print(latitude);
+    Serial.print(" Longitude= "); 
+    Serial.println(longitude);
+
+    // Construct URL for HTTP request
+    String url = "http://103.168.19.236:8000/getdata?lat=" + latitude + "&lng=" + longitude;
+    Serial.println("Sending data to server: " + url);
+
+    // Start GPRS and HTTP request
+    if (startGPRS() && initiateHTTPRequest(url)) {
+      Serial.println("GPS data sent successfully!");
+    } else {
+      Serial.println("Failed to send GPS data.");
+    }
+    
+    stopGPRS();
+  } else {
+    Serial.println("No valid GPS data available.");
+  }
+}
+
+bool startGPRS() {
+  if (!sendATcommand("AT+CFUN=1", "OK", 2000)) return false;
+  if (!sendATcommand("AT+CGATT=1", "OK", 2000)) return false;
+  if (!sendATcommand("AT+SAPBR=3,1,\"Contype\",\"GPRS\"", "OK", 2000)) return false;
+  if (!sendATcommand("AT+SAPBR=3,1,\"APN\",\"internet\"", "OK", 2000)) return false;
+  if (!sendATcommand("AT+SAPBR=1,1", "OK", 2000)) return false;
+  return true;
+}
+
+bool initiateHTTPRequest(String url) {
+  if (!sendATcommand("AT+HTTPINIT", "OK", 2000)) return false;
+  if (!sendATcommand("AT+HTTPPARA=\"CID\",1", "OK", 1000)) return false;
+
+  sim800L.print("AT+HTTPPARA=\"URL\",\"");
+  sim800L.print(url);
+  sim800L.println("\"");
+
+  if (!waitForResponse("OK", 1000)) return false;
+  if (!sendATcommand("AT+HTTPACTION=0", "0,200", 10000)) return false; // 0 means GET request
+  sendATcommand("AT+HTTPTERM", "OK", 2000);
+  return true;
+}
+
+void stopGPRS() {
+  sendATcommand("AT+SAPBR=0,1", "OK", 2000);
+  sendATcommand("AT+CIPSHUT", "SHUT OK", 1000);
+}
+
+bool sendATcommand(const char* command, const char* expected_response, unsigned int timeout) {
+  sim800L.println(command);
+  return waitForResponse(expected_response, timeout);
+}
+
+bool waitForResponse(const char* expected_response, unsigned int timeout) {
+  unsigned long start = millis();
+  String response = "";
+
+  while (millis() - start < timeout) {
+    if (sim800L.available()) {
+      response += (char)sim800L.read();
+      if (response.indexOf(expected_response) != -1) {
+        Serial.println(response);
+        return true;
+      }
+    }
+  }
+  
+  Serial.println("Response timed out: " + response);
+  return false;
+}
+
+____________________________________________________________
+
+
+
+#include <TinyGPS++.h>
+#include <SoftwareSerial.h>
+#include <AltSoftSerial.h>
+
+#define rxPin 2
+#define txPin 3
+SoftwareSerial sim800L(rxPin, txPin);
+AltSoftSerial neogps;
+
+TinyGPSPlus gps;
+
+// Interval for sending data
+unsigned long previousMillis = 0;
+long interval = 10000;
+
+void setup() {
+  Serial.begin(115200);        // Begin serial communication with Serial Monitor
+  sim800L.begin(9600);         // Begin serial communication with SIM800L
+  neogps.begin(9600);          // Begin serial communication with GPS module
+
+  Serial.println("Initializing...");
+
+  // Initialize SIM800L
+  if (!sendATcommand("AT", "OK", 2000)) {
+    Serial.println("SIM800L not responding!");
+    while (true);
+  }
+  sendATcommand("AT+CMGF=1", "OK", 2000);  // Set SMS mode to text
+}
+
+void loop() {
+  // Forward SIM800L responses to Serial Monitor
+  if (sim800L.available()) {
+    Serial.println(sim800L.readString());
+  }
+  // Forward Serial Monitor input to SIM800L
+  if (Serial.available()) {
+    sim800L.println(Serial.readString());
+  }
+
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis > interval) {
+    previousMillis = currentMillis;
+    sendGpsToServer();
+  }
+}
+
+void sendGpsToServer() {
+  // Gather GPS data
+  bool newData = false;
+  for (unsigned long start = millis(); millis() - start < 2000;) {
+    while (neogps.available()) {
+      if (gps.encode(neogps.read())) {
+        newData = true;
+        break;
+      }
+    }
+  }
+
+  if (true) {
+    String latitude = String(gps.location.lat(), 6);
+    String longitude = String(gps.location.lng(), 6);
+
+    Serial.print("Latitude= ");
+    Serial.print(latitude);
+    Serial.print(" Longitude= ");
+    Serial.println(longitude);
+
+    // Construct URL for HTTP request
+    String url = "http://103.168.19.236:8000/getdata?lat=" + latitude + "&lng=" + longitude;
+    Serial.println("Sending data to server: " + url);
+
+    // Start GPRS and send HTTP request
+    if (startGPRS() && initiateHTTPRequest(url)) {
+      Serial.println("GPS data sent successfully!");
+    } else {
+      Serial.println("Failed to send GPS data.");
+    }
+
+    stopGPRS();
+  } else {
+    Serial.println("No valid GPS data available.");
+  }
+}
+
+bool startGPRS() {
+  Serial.println("Starting GPRS...");
+  if (!sendATcommand("AT+CFUN=1", "OK", 2000)) return false;
+  if (!sendATcommand("AT+CGATT=1", "OK", 2000)) return false;
+  if (!sendATcommand("AT+SAPBR=3,1,\"Contype\",\"GPRS\"", "OK", 2000)) return false;
+  if (!sendATcommand("AT+SAPBR=3,1,\"APN\",\"internet\"", "OK", 2000)) return false;
+  if (!sendATcommand("AT+SAPBR=1,1", "OK", 2000)) return false;
+  return true;
+}
+
+bool initiateHTTPRequest(String url) {
+  Serial.println("Initializing HTTP...");
+  if (!sendATcommand("AT+HTTPINIT", "OK", 5000)) return false;
+  if (!sendATcommand("AT+HTTPPARA=\"CID\",1", "OK", 3000)) return false;
+
+  // Set HTTP URL
+  sim800L.print("AT+HTTPPARA=\"URL\",\"");
+  sim800L.print(url);
+  sim800L.println("\"");
+
+  if (!waitForResponse("OK", 1000)) return false;
+
+  // Start HTTP GET request
+  if (!sendATcommand("AT+HTTPACTION=0", "0,200", 3000)) return false; // 0 means GET request
+  sendATcommand("AT+HTTPTERM", "OK", 3000);
+  return true;
+}
+
+void stopGPRS() {
+  Serial.println("Stopping GPRS...");
+  sendATcommand("AT+SAPBR=0,1", "OK", 2000);
+  sendATcommand("AT+CIPSHUT", "SHUT OK", 1000);
+}
+
+bool sendATcommand(const char* command, const char* expected_response, unsigned int timeout) {
+  Serial.print("Sending: ");
+  Serial.println(command);
+
+  sim800L.println(command);
+  return waitForResponse(expected_response, timeout);
+}
+
+bool waitForResponse(const char* expected_response, unsigned int timeout) {
+  unsigned long start = millis();
+  String response = "";
+
+  while (millis() - start < timeout) {
+    while (sim800L.available()) {
+      char c = sim800L.read();
+      response += c;
+    }
+
+    if (response.indexOf(expected_response) != -1) {
+      Serial.println("Response: " + response);
+      return true;
+    }
+  }
+
+  Serial.println("Timeout or unexpected response: " + response);
+  return true;
+}

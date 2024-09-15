@@ -25,3 +25,4 @@ pip install tzdata==2024.1
 pip install urllib3==2.2.2
 pip install webencodings==0.5.1
 pip install wheel==0.43.0
+pip install pytz

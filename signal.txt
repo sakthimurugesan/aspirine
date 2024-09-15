@@ -1,0 +1,149 @@
+#include <SoftwareSerial.h>
+
+// Define pins for the GSM module
+SoftwareSerial mySerial(2, 3); // RX, TX pins for SIM900A
+
+String server = "103.168.19.236";  // Server IP
+String path = "/currentjunctionstates/?junction=1"; // API endpoint
+int port = 8000;  // Server port
+
+void setup() {
+  Serial.begin(9600); // Debugging
+  mySerial.begin(9600); // GSM communication
+
+  Serial.println("Initializing GSM Module...");
+      // GSM module initialization
+  delay(10000);
+  sendCommand("AT");
+  sendCommand("AT+CSQ");  // Signal quality check
+  sendCommand("AT+CREG?"); // Check registration
+  sendCommand("AT+CGATT?"); // Check GPRS attachment
+  sendCommand("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\""); // Set connection type
+  sendCommand("AT+SAPBR=3,1,\"APN\",\"internet\""); // Set your APN (replace 'your_apn' with your SIM provider's APN)
+  sendCommand("AT+SAPBR=1,1"); // Open GPRS context
+  sendCommand("AT+SAPBR=2,1"); // Query GPRS context
+  Serial.println("Setup completed.");
+}
+
+void loop() {
+  Serial.println("Fetching new data...");
+  fetchData(); // Fetch and print new data in each loop iteration
+  delay(2000);
+}
+
+void fetchData() {
+
+  Serial.println("Sending HTTP GET request...");
+  delay(1000);
+  sendCommand("AT+HTTPINIT"); // Initialize HTTP
+  delay(1000);
+  sendCommand("AT+HTTPPARA=\"CID\",1"); // Set HTTP bearer profile identifier
+  delay(1000);
+  sendCommand("AT+HTTPPARA=\"URL\",\"" + server + ":" + String(port) + path + "\""); // Set the URL
+  delay(1000);
+  sendCommand("AT+HTTPACTION=0"); // Start GET action
+
+  delay(2000); // Wait for the response
+
+  Serial.println("Reading HTTP response...");
+  mySerial.println("AT+HTTPREAD"); // Read the response
+  delay(2000); // Wait for the response to be available
+
+  String httpResponse = ""; // Variable to store the response
+
+  while (mySerial.available()) {
+    char c = mySerial.read();
+    httpResponse += c; // Append characters to the response string
+  }
+
+  Serial.println("Response:");
+  Serial.println(httpResponse); // Print the fetched response
+
+  sendCommand("AT+HTTPTERM"); // Terminate HTTP service
+}
+
+void sendCommand(String command) {
+  mySerial.println(command);
+  delay(2000); // Wait for the module to process
+  while (mySerial.available()) {
+    Serial.write(mySerial.read()); // Print module's response for debugging
+  }
+}
+
+
+
+
+
+
+
+#include <SoftwareSerial.h>
+
+// Define pins for the GSM module
+SoftwareSerial mySerial(2, 3); // RX, TX pins for SIM900A
+
+String server = "103.168.19.236";  // Server IP
+String path = "/currentjunctionstates/?junction=1"; // API endpoint
+int port = 8000;  // Server port
+
+void setup() {
+  Serial.begin(9600); // Debugging
+  mySerial.begin(9600); // GSM communication
+
+  Serial.println("Initializing GSM Module...");
+      // GSM module initialization
+  delay(10000);
+  sendCommand("AT");
+  sendCommand("AT+CSQ");  // Signal quality check
+  sendCommand("AT+CREG?"); // Check registration
+  sendCommand("AT+CGATT?"); // Check GPRS attachment
+  sendCommand("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\""); // Set connection type
+  sendCommand("AT+SAPBR=3,1,\"APN\",\"internet\""); // Set your APN (replace 'your_apn' with your SIM provider's APN)
+  sendCommand("AT+SAPBR=1,1"); // Open GPRS context
+  sendCommand("AT+SAPBR=2,1"); // Query GPRS context
+  Serial.println("Setup completed.");
+}
+
+void loop() {
+  Serial.println("Fetching new data...");
+  fetchData(); // Fetch and print new data in each loop iteration
+  delay(2000);
+}
+
+void fetchData() {
+
+  Serial.println("Sending HTTP GET request...");
+  delay(500);
+  sendCommand("AT+HTTPINIT"); // Initialize HTTP
+  delay(500);
+  sendCommand("AT+HTTPPARA=\"CID\",1"); // Set HTTP bearer profile identifier
+  delay(500);
+  sendCommand("AT+HTTPPARA=\"URL\",\"" + server + ":" + String(port) + path + "\""); // Set the URL
+  delay(500);
+  sendCommand("AT+HTTPACTION=0"); // Start GET action
+
+  delay(1500); // Wait for the response
+
+  Serial.println("Reading HTTP response...");
+  mySerial.println("AT+HTTPREAD"); // Read the response
+  delay(1500); // Wait for the response to be available
+
+  String httpResponse = ""; // Variable to store the response
+
+  while (mySerial.available()) {
+    char c = mySerial.read();
+    httpResponse += c; // Append characters to the response string
+  }
+
+  Serial.println("Response:");
+  Serial.println(httpResponse); // Print the fetched response
+
+  sendCommand("AT+HTTPTERM"); // Terminate HTTP service
+}
+
+void sendCommand(String command) {
+  mySerial.println(command);
+  delay(1500); // Wait for the module to process
+  while (mySerial.available()) {
+    Serial.write(mySerial.read()); // Print module's response for debugging
+  }
+}
